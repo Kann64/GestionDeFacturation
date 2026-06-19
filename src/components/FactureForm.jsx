@@ -24,9 +24,10 @@ import {
   METHODE_LABELS,
   TVA_DEFAUT,
   TVA_PAR_CATEGORIE,
+  DEVISES,
 } from '../utils/constants'
 import { calculerFacture } from '../utils/billing'
-import { formatMAD } from '../utils/format'
+import { formatMontant } from '../utils/format'
 
 const emptyLine = () => ({
   article_id: '',
@@ -42,6 +43,7 @@ const emptyLine = () => ({
 export default function FactureForm({ clients, articles, categories, onSubmit, submitting }) {
   const [clientId, setClientId] = useState('')
   const [methode, setMethode] = useState(METHODES.SIMPLE)
+  const [devise, setDevise] = useState('MAD')
   const [tvaGlobale, setTvaGlobale] = useState(TVA_DEFAUT)
   const [remiseGlobale, setRemiseGlobale] = useState(0)
   const [lignes, setLignes] = useState([emptyLine()])
@@ -92,6 +94,7 @@ export default function FactureForm({ clients, articles, categories, onSubmit, s
     onSubmit({
       client_id: clientId,
       methode,
+      devise,
       tva_globale: Number(tvaGlobale),
       remise_globale: Number(remiseGlobale),
       lignes: calcul.lignes,
@@ -131,7 +134,7 @@ export default function FactureForm({ clients, articles, categories, onSubmit, s
               ))}
             </TextField>
           </Grid>
-          <Grid item xs={12} md={7}>
+          <Grid item xs={12} md={5}>
             <TextField
               select
               fullWidth
@@ -142,6 +145,21 @@ export default function FactureForm({ clients, articles, categories, onSubmit, s
               {Object.values(METHODES).map((m) => (
                 <MenuItem key={m} value={m}>
                   {METHODE_LABELS[m]}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Grid>
+          <Grid item xs={12} md={2}>
+            <TextField
+              select
+              fullWidth
+              label="Devise"
+              value={devise}
+              onChange={(e) => setDevise(e.target.value)}
+            >
+              {DEVISES.map((d) => (
+                <MenuItem key={d.value} value={d.value}>
+                  {d.label}
                 </MenuItem>
               ))}
             </TextField>
@@ -256,7 +274,7 @@ export default function FactureForm({ clients, articles, categories, onSubmit, s
                 )}
                 <TableCell align="right">
                   <Typography variant="body2" sx={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                    {formatMAD(calcul.lignes[idx]?.totalLigne || 0)}
+                    {formatMontant(calcul.lignes[idx]?.totalLigne || 0, devise)}
                   </Typography>
                 </TableCell>
                 <TableCell align="right" sx={{ width: 48 }}>
@@ -298,21 +316,21 @@ export default function FactureForm({ clients, articles, categories, onSubmit, s
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography color="text.secondary">Total HT</Typography>
               <Typography sx={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                {formatMAD(calcul.totalHT)}
+                {formatMontant(calcul.totalHT, devise)}
               </Typography>
             </Box>
             {calcul.totalRemise > 0 && (
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                 <Typography color="text.secondary">Remise</Typography>
                 <Typography sx={{ fontFamily: 'JetBrains Mono, monospace' }} color="error.main">
-                  −{formatMAD(calcul.totalRemise)}
+                  −{formatMontant(calcul.totalRemise, devise)}
                 </Typography>
               </Box>
             )}
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
               <Typography color="text.secondary">TVA</Typography>
               <Typography sx={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                {formatMAD(calcul.totalTVA)}
+                {formatMontant(calcul.totalTVA, devise)}
               </Typography>
             </Box>
             <Divider sx={{ my: 1 }} />
@@ -322,7 +340,7 @@ export default function FactureForm({ clients, articles, categories, onSubmit, s
                 fontWeight={700}
                 sx={{ fontFamily: 'JetBrains Mono, monospace', color: 'secondary.dark' }}
               >
-                {formatMAD(calcul.totalTTC)}
+                {formatMontant(calcul.totalTTC, devise)}
               </Typography>
             </Box>
             <Button

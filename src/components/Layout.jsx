@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Outlet, useNavigate, useLocation, Link as RouterLink } from 'react-router-dom'
 import {
   AppBar,
+  Badge,
   Box,
   Drawer,
   IconButton,
@@ -16,6 +17,9 @@ import {
   MenuItem,
   Divider,
   Chip,
+  Popover,
+  Stack,
+  Button,
   useMediaQuery,
 } from '@mui/material'
 import { useTheme } from '@mui/material/styles'
@@ -27,9 +31,13 @@ import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline'
 import Inventory2OutlinedIcon from '@mui/icons-material/Inventory2Outlined'
 import CategoryOutlinedIcon from '@mui/icons-material/CategoryOutlined'
 import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined'
+import NotificationsOutlinedIcon from '@mui/icons-material/NotificationsOutlined'
+import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined'
 import LogoutIcon from '@mui/icons-material/Logout'
 import { useAuth } from '../contexts/AuthContext'
+import { useNotifications } from '../contexts/NotificationContext'
 import { ROLES } from '../utils/constants'
+import { formatDate } from '../utils/format'
 
 const DRAWER_W = 248
 
@@ -45,6 +53,7 @@ const NAV = {
     { to: '/admin/validation', label: 'Validation factures', icon: <FactCheckOutlinedIcon /> },
     { to: '/admin/articles', label: 'Articles', icon: <Inventory2OutlinedIcon /> },
     { to: '/admin/categories', label: 'Catégories', icon: <CategoryOutlinedIcon /> },
+    { to: '/admin/archives', label: 'Archives', icon: <ArchiveOutlinedIcon /> },
   ],
 }
 
@@ -53,9 +62,11 @@ export default function Layout() {
   const isDesktop = useMediaQuery(theme.breakpoints.up('md'))
   const [mobileOpen, setMobileOpen] = useState(false)
   const [anchor, setAnchor] = useState(null)
+  const [notifAnchor, setNotifAnchor] = useState(null)
   const navigate = useNavigate()
   const location = useLocation()
   const { user, profil, role, isAdmin, logout } = useAuth()
+  const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications()
 
   const items = NAV[role] || NAV[ROLES.USER]
 
@@ -153,6 +164,71 @@ export default function Layout() {
           <Typography sx={{ flexGrow: 1, fontWeight: 600 }}>
             {isAdmin ? 'Espace administrateur' : 'Espace agent'}
           </Typography>
+
+          {/* Cloche de notifications */}
+          <IconButton color="inherit" onClick={(e) => setNotifAnchor(e.currentTarget)} size="small" sx={{ mr: 1 }}>
+            <Badge badgeContent={unreadCount} color="error" max={99}>
+              <NotificationsOutlinedIcon />
+            </Badge>
+          </IconButton>
+          <Popover
+            open={Boolean(notifAnchor)}
+            anchorEl={notifAnchor}
+            onClose={() => setNotifAnchor(null)}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            PaperProps={{ sx: { width: 340, maxHeight: 420 } }}
+          >
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ px: 2, py: 1.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+              <Typography variant="subtitle2" fontWeight={700}>Notifications</Typography>
+              {unreadCount > 0 && (
+                <Button size="small" onClick={markAllAsRead} sx={{ fontSize: 11 }}>
+                  Tout marquer lu
+                </Button>
+              )}
+            </Stack>
+            <Box sx={{ overflowY: 'auto', maxHeight: 340 }}>
+              {notifications.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ p: 2.5, textAlign: 'center' }}>
+                  Aucune notification
+                </Typography>
+              ) : (
+                notifications.map((n) => (
+                  <Box
+                    key={n.id}
+                    onClick={() => {
+                      markAsRead(n.id)
+                      if (n.facture_id) {
+                        setNotifAnchor(null)
+                        navigate(
+                          isAdmin
+                            ? '/admin/validation'
+                            : `/app/factures/${n.facture_id}`,
+                        )
+                      }
+                    }}
+                    sx={{
+                      px: 2,
+                      py: 1.25,
+                      cursor: n.facture_id ? 'pointer' : 'default',
+                      bgcolor: n.lue ? 'transparent' : 'action.hover',
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                      '&:hover': { bgcolor: 'action.selected' },
+                    }}
+                  >
+                    <Typography variant="body2" sx={{ fontWeight: n.lue ? 400 : 600 }}>
+                      {n.message}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {formatDate(n.createdAt)}
+                    </Typography>
+                  </Box>
+                ))
+              )}
+            </Box>
+          </Popover>
+
           <IconButton onClick={(e) => setAnchor(e.currentTarget)} size="small">
             <Avatar sx={{ width: 34, height: 34, bgcolor: 'secondary.main', fontSize: 15 }}>
               {initials}

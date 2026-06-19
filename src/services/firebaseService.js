@@ -1,7 +1,6 @@
 import { ref, push, set, update, remove, get, child } from 'firebase/database'
 import { db } from '../firebase'
 
-// Convertit un objet { id1: {...}, id2: {...} } Firebase en tableau [{ id, ... }]
 const toArray = (snapshotVal) =>
   snapshotVal
     ? Object.entries(snapshotVal).map(([id, value]) => ({ id, ...value }))
@@ -9,9 +8,11 @@ const toArray = (snapshotVal) =>
 
 export const firebaseService = {
   // ───────────── Clients ─────────────
-  async getClients() {
+  async getClients(societeId = null) {
     const snap = await get(ref(db, 'clients'))
-    return toArray(snap.val())
+    const all = toArray(snap.val())
+    if (!societeId) return all
+    return all.filter((c) => !c.societe_id || c.societe_id === societeId)
   },
 
   async getClient(id) {
@@ -35,11 +36,13 @@ export const firebaseService = {
   },
 
   // ───────────── Factures ─────────────
-  async getFactures() {
+  async getFactures(societeId = null) {
     const snap = await get(ref(db, 'factures'))
-    return toArray(snap.val()).sort(
+    const all = toArray(snap.val()).sort(
       (a, b) => new Date(b.date_creation) - new Date(a.date_creation),
     )
+    if (!societeId) return all
+    return all.filter((f) => !f.societe_id || f.societe_id === societeId)
   },
 
   async getFacturesByUser(uid) {
@@ -66,6 +69,50 @@ export const firebaseService = {
 
   async deleteFacture(id) {
     await remove(ref(db, `factures/${id}`))
+  },
+
+  // ───────────── Archivage annuel ─────────────
+  async archiverAnnee(annee) {
+    const toutes = await this.getFactures()
+    const aArchiver = toutes.filter(
+      (f) => new Date(f.date_creation).getFullYear() === Number(annee),
+    )
+    if (aArchiver.length === 0) return 0
+
+    const copies = {}
+    const suppressions = {}
+    aArchiver.forEach((f) => {
+      const { id, ...data } = f
+      copies[`factures_archives/${annee}/${id}`] = data
+      suppressions[`factures/${id}`] = null
+    })
+
+    await update(ref(db), { ...copies, ...suppressions })
+    return aArchiver.length
+  },
+
+  async getArchives(annee = null) {
+    if (annee) {
+      const snap = await get(ref(db, `factures_archives/${annee}`))
+      return toArray(snap.val()).sort(
+        (a, b) => new Date(b.date_creation) - new Date(a.date_creation),
+      )
+    }
+    const snap = await get(ref(db, 'factures_archives'))
+    if (!snap.exists()) return []
+    const all = []
+    snap.forEach((yearSnap) => {
+      yearSnap.forEach((fSnap) => {
+        all.push({ id: fSnap.key, annee: yearSnap.key, ...fSnap.val() })
+      })
+    })
+    return all.sort((a, b) => new Date(b.date_creation) - new Date(a.date_creation))
+  },
+
+  async getAnneesArchivees() {
+    const snap = await get(ref(db, 'factures_archives'))
+    if (!snap.exists()) return []
+    return Object.keys(snap.val()).sort((a, b) => b - a)
   },
 }
 

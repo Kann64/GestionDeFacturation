@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Box, CircularProgress, Alert, Button } from '@mui/material'
 import { firebaseService } from '../../services/firebaseService'
 import { jsonService } from '../../services/jsonService'
+import { notificationService, NOTIF_TYPES } from '../../services/notificationService'
 import { useAuth } from '../../contexts/AuthContext'
 import FactureForm from '../../components/FactureForm'
 import { PageHeader } from '../../components/ui'
@@ -10,7 +11,7 @@ import { genererNumeroFacture } from '../../utils/format'
 import { STATUTS } from '../../utils/constants'
 
 export default function FactureCreate() {
-  const { user } = useAuth()
+  const { user, profil } = useAuth()
   const navigate = useNavigate()
   const [clients, setClients] = useState([])
   const [articles, setArticles] = useState([])
@@ -25,7 +26,7 @@ export default function FactureCreate() {
       setLoadError('')
       try {
         const [cl, art, cat] = await Promise.all([
-          firebaseService.getClients(),
+          firebaseService.getClients(profil?.societe_id),
           jsonService.getArticles(),
           jsonService.getCategories(),
         ])
@@ -57,8 +58,15 @@ export default function FactureCreate() {
         type_virement: '',
         validated_by_admin: false,
         created_by: user.uid,
+        societe_id: profil?.societe_id || null,
       }
       const saved = await firebaseService.addFacture(facture)
+      await notificationService.notifyAdmins({
+        type: NOTIF_TYPES.NOUVELLE_FACTURE,
+        message: `Nouvelle facture ${saved.numero} créée et en attente de validation.`,
+        facture_id: saved.id,
+        facture_numero: saved.numero,
+      })
       navigate(`/app/factures/${saved.id}`)
     } finally {
       setSubmitting(false)

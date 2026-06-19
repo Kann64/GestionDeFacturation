@@ -15,6 +15,16 @@
       ".read": "auth != null",
       ".write": "auth != null",
       ".indexOn": ["date_creation", "created_by"]
+    },
+    "notifications": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        ".write": "auth != null"
+      }
+    },
+    "factures_archives": {
+      ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'",
+      ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() === 'admin'"
     }
   }
 }

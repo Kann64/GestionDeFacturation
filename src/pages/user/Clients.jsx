@@ -18,11 +18,13 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
 import PeopleOutlinedIcon from '@mui/icons-material/PeopleOutlined'
 import { firebaseService } from '../../services/firebaseService'
+import { useAuth } from '../../contexts/AuthContext'
 import ClientForm from '../../components/ClientForm'
 import ConfirmDialog from '../../components/ConfirmDialog'
 import { EmptyState, PageHeader } from '../../components/ui'
 
 export default function Clients() {
+  const { profil } = useAuth()
   const [clients, setClients] = useState([])
   const [loading, setLoading] = useState(true)
   const [formOpen, setFormOpen] = useState(false)
@@ -32,7 +34,7 @@ export default function Clients() {
   const load = async () => {
     setLoading(true)
     try {
-      setClients(await firebaseService.getClients())
+      setClients(await firebaseService.getClients(profil?.societe_id))
     } finally {
       setLoading(false)
     }
@@ -40,11 +42,12 @@ export default function Clients() {
 
   useEffect(() => {
     load()
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profil?.societe_id])
 
   const handleSubmit = async (values) => {
     if (editing) await firebaseService.updateClient(editing.id, values)
-    else await firebaseService.addClient(values)
+    else await firebaseService.addClient({ ...values, societe_id: profil?.societe_id || null })
     setFormOpen(false)
     setEditing(null)
     load()

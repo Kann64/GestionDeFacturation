@@ -4,7 +4,7 @@ import {
   signOut,
   updateProfile,
 } from 'firebase/auth'
-import { ref, set, get } from 'firebase/database'
+import { ref, set, get, update } from 'firebase/database'
 import { auth, db } from '../firebase'
 import { ROLES } from '../utils/constants'
 
@@ -53,6 +53,10 @@ export const authService = {
   async getProfil(uid) {
     const snap = await get(ref(db, `users/${uid}`))
     return snap.exists() ? snap.val() : null
+  },
+
+  async updateUserSociete(uid, societeId) {
+    await update(ref(db, `users/${uid}`), { societe_id: societeId })
   },
 }
 

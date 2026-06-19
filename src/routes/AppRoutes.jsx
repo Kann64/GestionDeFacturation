@@ -12,6 +12,7 @@ import AdminDashboard from '../pages/admin/AdminDashboard'
 import Articles from '../pages/admin/Articles'
 import Categories from '../pages/admin/Categories'
 import ValidationFactures from '../pages/admin/ValidationFactures'
+import Archives from '../pages/admin/Archives'
 
 export default function AppRoutes() {
   return (
@@ -48,6 +49,7 @@ export default function AppRoutes() {
         <Route path="validation" element={<ValidationFactures />} />
         <Route path="articles" element={<Articles />} />
         <Route path="categories" element={<Categories />} />
+        <Route path="archives" element={<Archives />} />
       </Route>
 
       <Route path="/" element={<Navigate to="/app" replace />} />

@@ -5,6 +5,15 @@ export const formatMAD = (value) =>
     minimumFractionDigits: 2,
   }).format(Number(value) || 0)
 
+const DEVISE_LOCALES = { MAD: 'fr-MA', EUR: 'fr-FR', USD: 'en-US' }
+
+export const formatMontant = (value, devise = 'MAD') =>
+  new Intl.NumberFormat(DEVISE_LOCALES[devise] || 'fr-MA', {
+    style: 'currency',
+    currency: devise || 'MAD',
+    minimumFractionDigits: 2,
+  }).format(Number(value) || 0)
+
 export const formatNumber = (value) =>
   new Intl.NumberFormat('fr-MA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
     Number(value) || 0,

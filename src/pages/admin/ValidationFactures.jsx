@@ -22,14 +22,20 @@ import CancelOutlinedIcon from '@mui/icons-material/CancelOutlined'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import FactCheckOutlinedIcon from '@mui/icons-material/FactCheckOutlined'
 import { firebaseService } from '../../services/firebaseService'
+import { jsonService } from '../../services/jsonService'
+import { useAuth } from '../../contexts/AuthContext'
+import { notificationService, NOTIF_TYPES } from '../../services/notificationService'
+import { emailService } from '../../services/emailService'
 import { PageHeader, EmptyState, StatutChip } from '../../components/ui'
-import { formatMAD, formatDate } from '../../utils/format'
+import { formatMontant, formatDate } from '../../utils/format'
 import { STATUTS } from '../../utils/constants'
 
 export default function ValidationFactures() {
   const navigate = useNavigate()
+  const { profil } = useAuth()
   const [factures, setFactures] = useState([])
   const [clients, setClients] = useState({})
+  const [societe, setSociete] = useState({})
   const [loading, setLoading] = useState(true)
   const [filtre, setFiltre] = useState('all')
 
@@ -37,11 +43,14 @@ export default function ValidationFactures() {
     setLoading(true)
     try {
       const [fs, cl] = await Promise.all([
-        firebaseService.getFactures(),
-        firebaseService.getClients(),
+        firebaseService.getFactures(profil?.societe_id),
+        firebaseService.getClients(profil?.societe_id),
       ])
       setFactures(fs)
       setClients(Object.fromEntries(cl.map((c) => [c.id, c])))
+      try {
+        setSociete((await jsonService.getParametres()) || {})
+      } catch {}
     } finally {
       setLoading(false)
     }
@@ -52,10 +61,31 @@ export default function ValidationFactures() {
 
   const valider = async (f) => {
     await firebaseService.updateFacture(f.id, { validated_by_admin: true, statut: STATUTS.PAYEE })
+    if (f.created_by) {
+      await notificationService.sendToUser(f.created_by, {
+        type: NOTIF_TYPES.FACTURE_VALIDEE,
+        message: `Votre facture ${f.numero} a été validée et marquée comme payée.`,
+        facture_id: f.id,
+        facture_numero: f.numero,
+      })
+    }
+    const client = clients[f.client_id]
+    await emailService.sendFactureEmail({ ...f, statut: STATUTS.PAYEE }, client, societe).catch(
+      (e) => console.warn('[emailService] Envoi email échoué:', e.message),
+    )
     load()
   }
+
   const rejeter = async (f) => {
     await firebaseService.updateFacture(f.id, { validated_by_admin: true, statut: STATUTS.REJETEE })
+    if (f.created_by) {
+      await notificationService.sendToUser(f.created_by, {
+        type: NOTIF_TYPES.FACTURE_REJETEE,
+        message: `Votre facture ${f.numero} a été rejetée.`,
+        facture_id: f.id,
+        facture_numero: f.numero,
+      })
+    }
     load()
   }
 
@@ -118,7 +148,7 @@ export default function ValidationFactures() {
                     <TableCell>{clients[f.client_id]?.nom || '—'}</TableCell>
                     <TableCell>{formatDate(f.date_creation)}</TableCell>
                     <TableCell align="right" sx={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                      {formatMAD(f.total_ttc)}
+                      {formatMontant(f.total_ttc, f.devise)}
                     </TableCell>
                     <TableCell>
                       <StatutChip statut={f.statut} />

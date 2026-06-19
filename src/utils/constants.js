@@ -40,6 +40,13 @@ export const METHODE_LABELS = {
 
 export const TVA_DEFAUT = 20 // %
 
+// Devises disponibles (Feature 6)
+export const DEVISES = [
+  { value: 'MAD', label: 'MAD — Dirham (DH)' },
+  { value: 'EUR', label: 'EUR — Euro (€)' },
+  { value: 'USD', label: 'USD — Dollar ($)' },
+]
+
 // Taux de TVA par catégorie pour la méthode 4 (fallback si non défini)
 export const TVA_PAR_CATEGORIE = {
   Informatique: 20,

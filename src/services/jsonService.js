@@ -48,6 +48,27 @@ export const jsonService = {
     const { data } = await http.put('/parametres', parametres)
     return data
   },
+
+  // ───────────── Sociétés ─────────────
+  async getSocietes() {
+    const { data } = await http.get('/societes')
+    return data
+  },
+  async getSociete(id) {
+    const { data } = await http.get(`/societes/${id}`)
+    return data
+  },
+  async addSociete(societe) {
+    const { data } = await http.post('/societes', societe)
+    return data
+  },
+  async updateSociete(id, societe) {
+    const { data } = await http.put(`/societes/${id}`, societe)
+    return data
+  },
+  async deleteSociete(id) {
+    await http.delete(`/societes/${id}`)
+  },
 }
 
 export default jsonService

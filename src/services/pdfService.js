@@ -1,5 +1,6 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import QRCode from 'qrcode'
 import { formatNumber, formatDate } from '../utils/format'
 import { STATUT_LABELS, METHODE_LABELS } from '../utils/constants'
 
@@ -7,16 +8,29 @@ const INK = [31, 42, 68]
 const GOLD = [176, 122, 30]
 const GREY = [90, 100, 120]
 
+const DEVISE_LABELS = { MAD: 'DH', EUR: '€', USD: '$' }
+
+function deviseSuffix(devise) {
+  return DEVISE_LABELS[devise] || 'DH'
+}
+
+async function buildQrDataUrl(facture) {
+  const content = `Facture:${facture.numero}|Statut:${STATUT_LABELS[facture.statut] || facture.statut}|TTC:${facture.total_ttc}${deviseSuffix(facture.devise)}`
+  return QRCode.toDataURL(content, { width: 128, margin: 1 })
+}
+
 /**
- * Génère et télécharge le PDF d'une facture.
- * @param {Object} facture - facture complète (avec lignes calculées)
+ * Génère et télécharge le PDF d'une facture (async pour QR code).
+ * @param {Object} facture - facture complète (avec lignes calculées, signature en base64 optionnelle)
  * @param {Object} client  - client destinataire
  * @param {Object} societe - paramètres entreprise (nom, adresse, ice, ...)
  */
-export function genererFacturePDF(facture, client, societe = {}) {
+export async function genererFacturePDF(facture, client, societe = {}) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   const pageW = doc.internal.pageSize.getWidth()
   const marge = 14
+  const devise = facture.devise || 'MAD'
+  const suffix = deviseSuffix(devise)
 
   // ── En-tête : logo + société ──
   doc.setFillColor(...INK)
@@ -33,9 +47,10 @@ export function genererFacturePDF(facture, client, societe = {}) {
   doc.setFontSize(8.5)
   doc.setTextColor(...GREY)
   const sLines = [
-    societe.adresse || 'Adresse de l\'entreprise',
+    societe.adresse || "Adresse de l'entreprise",
     [societe.ville, societe.tel].filter(Boolean).join(' · ') || 'Casablanca, Maroc',
     societe.ice ? `ICE : ${societe.ice}` : '',
+    societe.rc ? `RC : ${societe.rc}` : '',
   ].filter(Boolean)
   doc.text(sLines, marge + 16, 22)
 
@@ -49,12 +64,11 @@ export function genererFacturePDF(facture, client, societe = {}) {
   doc.setTextColor(...INK)
   doc.text(`N° ${facture.numero}`, pageW - marge, 24, { align: 'right' })
   doc.text(`Date : ${formatDate(facture.date_creation)}`, pageW - marge, 29, { align: 'right' })
-  doc.text(`Statut : ${STATUT_LABELS[facture.statut] || facture.statut}`, pageW - marge, 34, {
-    align: 'right',
-  })
+  doc.text(`Statut : ${STATUT_LABELS[facture.statut] || facture.statut}`, pageW - marge, 34, { align: 'right' })
+  doc.text(`Devise : ${devise}`, pageW - marge, 39, { align: 'right' })
 
   // ── Destinataire ──
-  let y = 46
+  let y = 48
   doc.setDrawColor(230, 232, 236)
   doc.line(marge, y, pageW - marge, y)
   y += 7
@@ -90,7 +104,7 @@ export function genererFacturePDF(facture, client, societe = {}) {
 
   autoTable(doc, {
     startY: y + 4,
-    head: [['#', 'Désignation', 'Qté', 'P.U. (DH)', 'Remise', 'TVA', 'Total (DH)']],
+    head: [['#', 'Désignation', 'Qté', `P.U. (${suffix})`, 'Remise', 'TVA', `Total (${suffix})`]],
     body,
     theme: 'grid',
     headStyles: { fillColor: INK, textColor: 255, fontSize: 9 },
@@ -116,7 +130,7 @@ export function genererFacturePDF(facture, client, societe = {}) {
     doc.setTextColor(...(bold ? INK : GREY))
     doc.text(label, boxX, ty)
     doc.setTextColor(...INK)
-    doc.text(`${formatNumber(value)} DH`, pageW - marge, ty, { align: 'right' })
+    doc.text(`${formatNumber(value)} ${suffix}`, pageW - marge, ty, { align: 'right' })
     ty += bold ? 8 : 6
   }
   ligneTotale('Total HT', facture.total_ht)
@@ -128,16 +142,44 @@ export function genererFacturePDF(facture, client, societe = {}) {
   ty += 2
   ligneTotale('Total TTC', facture.total_ttc, true)
 
-  // ── Pied de page : méthode + signature ──
-  const footY = 270
+  // ── Pied de page : méthode + QR + signature ──
+  const footY = 262
   doc.setFontSize(8)
   doc.setFont('helvetica', 'italic')
   doc.setTextColor(...GREY)
   doc.text(METHODE_LABELS[facture.methode] || '', marge, footY)
+
+  // Labels
   doc.setFont('helvetica', 'normal')
-  doc.text('Signature & cachet', pageW - marge - 40, footY)
+  doc.setFontSize(7.5)
+  doc.setTextColor(...GREY)
+
+  // Signature box
+  const sigX = pageW - marge - 48
+  const sigY = footY + 2
+  const sigW = 48
+  const sigH = 26
+  doc.text('Signature & cachet', sigX + sigW / 2, footY, { align: 'center' })
   doc.setDrawColor(200, 204, 212)
-  doc.rect(pageW - marge - 45, footY + 2, 45, 18)
+  doc.rect(sigX, sigY, sigW, sigH)
+
+  if (facture.signature) {
+    try {
+      doc.addImage(facture.signature, 'PNG', sigX + 1, sigY + 1, sigW - 2, sigH - 2)
+    } catch {
+      // signature invalide — on laisse la boîte vide
+    }
+  }
+
+  // QR code
+  try {
+    const qrDataUrl = await buildQrDataUrl(facture)
+    const qrX = sigX - 5 - 28
+    doc.text('Vérif. QR', qrX + 14, footY, { align: 'center' })
+    doc.addImage(qrDataUrl, 'PNG', qrX, sigY, 28, 28)
+  } catch {
+    // QR generation failed — skip silently
+  }
 
   doc.save(`${facture.numero}.pdf`)
 }

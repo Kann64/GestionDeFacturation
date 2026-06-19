@@ -17,16 +17,18 @@ import {
 import PictureAsPdfOutlinedIcon from '@mui/icons-material/PictureAsPdfOutlined'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import AddIcon from '@mui/icons-material/Add'
+import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined'
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined'
 import { firebaseService } from '../../services/firebaseService'
 import { jsonService } from '../../services/jsonService'
 import { useAuth } from '../../contexts/AuthContext'
 import { genererFacturePDF } from '../../services/pdfService'
+import { exporterFacturesExcel } from '../../utils/excelExport'
 import { PageHeader, EmptyState, StatutChip } from '../../components/ui'
-import { formatMAD, formatDate } from '../../utils/format'
+import { formatMontant, formatDate } from '../../utils/format'
 
 export default function FactureHistory() {
-  const { user } = useAuth()
+  const { user, profil } = useAuth()
   const navigate = useNavigate()
   const [factures, setFactures] = useState([])
   const [clients, setClients] = useState({})
@@ -44,8 +46,10 @@ export default function FactureHistory() {
         setFactures(fs)
         setClients(Object.fromEntries(cl.map((c) => [c.id, c])))
         try {
-          const params = await jsonService.getParametres()
-          setSociete(params || {})
+          const soc = profil?.societe_id
+            ? await jsonService.getSociete(profil.societe_id)
+            : await jsonService.getParametres()
+          setSociete(soc || {})
         } catch {
           /* paramètres optionnels */
         }
@@ -53,9 +57,15 @@ export default function FactureHistory() {
         setLoading(false)
       }
     })()
-  }, [user.uid])
+  }, [user.uid, profil?.societe_id])
 
-  const downloadPDF = (f) => genererFacturePDF(f, clients[f.client_id], societe)
+  const downloadPDF = async (f) => {
+    await genererFacturePDF(f, clients[f.client_id], societe)
+  }
+
+  const handleExcelExport = () => {
+    exporterFacturesExcel(factures, clients, 'mes_factures')
+  }
 
   return (
     <Box>
@@ -63,9 +73,19 @@ export default function FactureHistory() {
         title="Mes factures"
         subtitle="Historique de vos factures et leur statut."
         action={
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/app/factures/nouvelle')}>
-            Nouvelle facture
-          </Button>
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="outlined"
+              startIcon={<TableChartOutlinedIcon />}
+              onClick={handleExcelExport}
+              disabled={factures.length === 0}
+            >
+              Excel
+            </Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/app/factures/nouvelle')}>
+              Nouvelle facture
+            </Button>
+          </Stack>
         }
       />
       {loading ? (
@@ -106,7 +126,7 @@ export default function FactureHistory() {
                     <TableCell>{clients[f.client_id]?.nom || '—'}</TableCell>
                     <TableCell>{formatDate(f.date_creation)}</TableCell>
                     <TableCell align="right" sx={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                      {formatMAD(f.total_ttc)}
+                      {formatMontant(f.total_ttc, f.devise)}
                     </TableCell>
                     <TableCell>
                       <StatutChip statut={f.statut} />

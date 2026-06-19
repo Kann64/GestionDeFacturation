@@ -1,9 +1,28 @@
 import { useEffect, useState } from 'react'
-import { Box, Grid, Paper, Typography, CircularProgress } from '@mui/material'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../contexts/AuthContext'
+import {
+  Box,
+  Grid,
+  Paper,
+  Typography,
+  CircularProgress,
+  Button,
+  Stack,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
+  MenuItem,
+  Alert,
+} from '@mui/material'
 import ReceiptLongOutlinedIcon from '@mui/icons-material/ReceiptLongOutlined'
 import PaidOutlinedIcon from '@mui/icons-material/PaidOutlined'
 import HourglassEmptyOutlinedIcon from '@mui/icons-material/HourglassEmptyOutlined'
 import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined'
+import TableChartOutlinedIcon from '@mui/icons-material/TableChartOutlined'
+import ArchiveOutlinedIcon from '@mui/icons-material/ArchiveOutlined'
 import {
   ResponsiveContainer,
   BarChart,
@@ -20,6 +39,7 @@ import {
   Legend,
 } from 'recharts'
 import { firebaseService } from '../../services/firebaseService'
+import { exporterFacturesExcel } from '../../utils/excelExport'
 import { KpiCard } from '../../components/KpiCard'
 import { PageHeader } from '../../components/ui'
 import { computeKpis, caMensuel, repartitionStatuts } from '../../utils/stats'
@@ -27,20 +47,51 @@ import { formatMAD } from '../../utils/format'
 
 const STATUT_COLORS = ['#2E7D5B', '#C9821A', '#C0392B']
 
+const currentYear = new Date().getFullYear()
+const years = Array.from({ length: 5 }, (_, i) => currentYear - i)
+
 export default function AdminDashboard() {
+  const navigate = useNavigate()
+  const { profil } = useAuth()
   const [factures, setFactures] = useState([])
+  const [clients, setClients] = useState({})
   const [loading, setLoading] = useState(true)
+  const [archiveOpen, setArchiveOpen] = useState(false)
+  const [archiveAnnee, setArchiveAnnee] = useState(String(currentYear - 1))
+  const [archiving, setArchiving] = useState(false)
+  const [archiveResult, setArchiveResult] = useState(null)
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const [fs, cl] = await Promise.all([
+        firebaseService.getFactures(profil?.societe_id),
+        firebaseService.getClients(profil?.societe_id),
+      ])
+      setFactures(fs)
+      setClients(Object.fromEntries(cl.map((c) => [c.id, c])))
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    ;(async () => {
-      setLoading(true)
-      try {
-        setFactures(await firebaseService.getFactures())
-      } finally {
-        setLoading(false)
-      }
-    })()
+    load()
   }, [])
+
+  const handleArchiver = async () => {
+    setArchiving(true)
+    setArchiveResult(null)
+    try {
+      const count = await firebaseService.archiverAnnee(Number(archiveAnnee))
+      setArchiveResult({ success: true, count })
+      load()
+    } catch (e) {
+      setArchiveResult({ success: false, message: e.message })
+    } finally {
+      setArchiving(false)
+    }
+  }
 
   if (loading)
     return (
@@ -55,7 +106,35 @@ export default function AdminDashboard() {
 
   return (
     <Box>
-      <PageHeader title="Tableau de bord" subtitle="Vue d'ensemble de l'activité de facturation." />
+      <PageHeader
+        title="Tableau de bord"
+        subtitle="Vue d'ensemble de l'activité de facturation."
+        action={
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="outlined"
+              startIcon={<TableChartOutlinedIcon />}
+              onClick={() => exporterFacturesExcel(factures, clients, 'factures_admin')}
+              disabled={factures.length === 0}
+            >
+              Excel
+            </Button>
+            <Button
+              variant="outlined"
+              startIcon={<ArchiveOutlinedIcon />}
+              onClick={() => { setArchiveResult(null); setArchiveOpen(true) }}
+            >
+              Archiver
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={() => navigate('/admin/archives')}
+            >
+              Voir archives
+            </Button>
+          </Stack>
+        }
+      />
 
       <Grid container spacing={2.5} sx={{ mb: 2.5 }}>
         <Grid item xs={12} sm={6} md={3}>
@@ -156,6 +235,53 @@ export default function AdminDashboard() {
           </Paper>
         </Grid>
       </Grid>
+
+      {/* Dialog archivage */}
+      <Dialog open={archiveOpen} onClose={() => setArchiveOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Archiver une année</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Les factures de l'année sélectionnée seront déplacées vers les archives
+            (lecture seule). Cette action est irréversible depuis l'interface.
+          </Typography>
+          <TextField
+            select
+            fullWidth
+            label="Année à archiver"
+            value={archiveAnnee}
+            onChange={(e) => setArchiveAnnee(e.target.value)}
+          >
+            {years.map((y) => (
+              <MenuItem key={y} value={String(y)}>
+                {y}
+              </MenuItem>
+            ))}
+          </TextField>
+          {archiveResult && (
+            <Alert
+              severity={archiveResult.success ? 'success' : 'error'}
+              sx={{ mt: 2 }}
+            >
+              {archiveResult.success
+                ? `${archiveResult.count} facture(s) archivée(s) avec succès.`
+                : `Erreur : ${archiveResult.message}`}
+            </Alert>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setArchiveOpen(false)} color="inherit">
+            Fermer
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={handleArchiver}
+            disabled={archiving}
+          >
+            {archiving ? 'Archivage…' : 'Archiver'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

@@ -52,7 +52,7 @@ export function AuthProvider({ children }) {
 
   const login = async (creds) => authService.login(creds)
   const register = async (data) => {
-    await authService.register(data)
+    return authService.register(data)
   }
   const logout = async () => authService.logout()
 

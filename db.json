@@ -19,5 +19,29 @@
     "ville": "Casablanca, Maroc",
     "tel": "+212 5 22 00 00 00",
     "ice": "001234567000089"
-  }
+  },
+  "societes": [
+    {
+      "id": 1,
+      "nom": "Ma Société SARL",
+      "adresse": "123 Boulevard Mohammed V",
+      "ville": "Casablanca, Maroc",
+      "tel": "+212 5 22 00 00 00",
+      "email": "contact@masociete.ma",
+      "ice": "001234567000089",
+      "rc": "RC-12345",
+      "logo": ""
+    },
+    {
+      "id": 2,
+      "nom": "Filiale Nord SARL",
+      "adresse": "45 Rue Al Massira",
+      "ville": "Rabat, Maroc",
+      "tel": "+212 5 37 00 00 00",
+      "email": "contact@filialenord.ma",
+      "ice": "002345678000090",
+      "rc": "RC-67890",
+      "logo": ""
+    }
+  ]
 }

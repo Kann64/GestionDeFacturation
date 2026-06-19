@@ -18,14 +18,18 @@ import {
   Stack,
   Snackbar,
   Alert,
+  Chip,
 } from '@mui/material'
 import PictureAsPdfOutlinedIcon from '@mui/icons-material/PictureAsPdfOutlined'
+import DrawOutlinedIcon from '@mui/icons-material/DrawOutlined'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline'
 import { firebaseService } from '../../services/firebaseService'
 import { jsonService } from '../../services/jsonService'
 import { genererFacturePDF } from '../../services/pdfService'
 import { PageHeader, StatutChip } from '../../components/ui'
-import { formatMAD, formatDate } from '../../utils/format'
+import SignatureDialog from '../../components/SignatureDialog'
+import { formatMontant, formatDate } from '../../utils/format'
 import {
   STATUTS,
   STATUT_LABELS,
@@ -40,8 +44,10 @@ export default function FactureDetail() {
   const [client, setClient] = useState(null)
   const [societe, setSociete] = useState({})
   const [loading, setLoading] = useState(true)
+  const [pdfLoading, setPdfLoading] = useState(false)
   const [suivi, setSuivi] = useState({ date_depot: '', date_encaissement: '', type_virement: '', statut: '' })
   const [saved, setSaved] = useState(false)
+  const [sigOpen, setSigOpen] = useState(false)
 
   useEffect(() => {
     ;(async () => {
@@ -56,11 +62,15 @@ export default function FactureDetail() {
           statut: f.statut || STATUTS.EN_ATTENTE,
         })
         if (f.client_id) setClient(await firebaseService.getClient(f.client_id))
-      }
-      try {
-        setSociete((await jsonService.getParametres()) || {})
-      } catch {
-        /* optionnel */
+        try {
+          if (f.societe_id) {
+            setSociete(await jsonService.getSociete(f.societe_id))
+          } else {
+            setSociete((await jsonService.getParametres()) || {})
+          }
+        } catch {
+          try { setSociete((await jsonService.getParametres()) || {}) } catch {}
+        }
       }
       setLoading(false)
     })()
@@ -73,6 +83,23 @@ export default function FactureDetail() {
     setFacture((f) => ({ ...f, ...suivi }))
     setSaved(true)
   }
+
+  const handleSaveSignature = async (dataUrl) => {
+    setSigOpen(false)
+    await firebaseService.updateFacture(id, { signature: dataUrl })
+    setFacture((f) => ({ ...f, signature: dataUrl }))
+  }
+
+  const handleDownloadPDF = async () => {
+    setPdfLoading(true)
+    try {
+      await genererFacturePDF(facture, client, societe)
+    } finally {
+      setPdfLoading(false)
+    }
+  }
+
+  const devise = facture?.devise || 'MAD'
 
   if (loading)
     return (
@@ -103,11 +130,19 @@ export default function FactureDetail() {
           <Stack direction="row" spacing={1.5} alignItems="center">
             <StatutChip statut={facture.statut} size="medium" />
             <Button
+              variant="outlined"
+              startIcon={<DrawOutlinedIcon />}
+              onClick={() => setSigOpen(true)}
+            >
+              {facture.signature ? 'Modifier signature' : 'Signer'}
+            </Button>
+            <Button
               variant="contained"
               startIcon={<PictureAsPdfOutlinedIcon />}
-              onClick={() => genererFacturePDF(facture, client, societe)}
+              onClick={handleDownloadPDF}
+              disabled={pdfLoading}
             >
-              PDF
+              {pdfLoading ? 'Génération…' : 'PDF'}
             </Button>
           </Stack>
         }
@@ -142,10 +177,10 @@ export default function FactureDetail() {
                     <TableRow key={i}>
                       <TableCell>{l.designation}</TableCell>
                       <TableCell align="right">{l.qte}</TableCell>
-                      <TableCell align="right">{formatMAD(l.prix_unitaire)}</TableCell>
+                      <TableCell align="right">{formatMontant(l.prix_unitaire, devise)}</TableCell>
                       <TableCell align="right">{l.tauxTVA}%</TableCell>
                       <TableCell align="right" sx={{ fontFamily: 'JetBrains Mono, monospace' }}>
-                        {formatMAD(l.totalLigne)}
+                        {formatMontant(l.totalLigne, devise)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -153,19 +188,19 @@ export default function FactureDetail() {
               </Table>
             </Box>
             <Box sx={{ p: 2.5, maxWidth: 320, ml: 'auto' }}>
-              <Row label="Total HT" value={formatMAD(facture.total_ht)} />
+              <Row label="Total HT" value={formatMontant(facture.total_ht, devise)} />
               {facture.total_remise > 0 && (
-                <Row label="Remise" value={`−${formatMAD(facture.total_remise)}`} />
+                <Row label="Remise" value={`−${formatMontant(facture.total_remise, devise)}`} />
               )}
-              <Row label="TVA" value={formatMAD(facture.tva)} />
+              <Row label="TVA" value={formatMontant(facture.tva, devise)} />
               <Divider sx={{ my: 1 }} />
-              <Row label="Total TTC" value={formatMAD(facture.total_ttc)} strong />
+              <Row label="Total TTC" value={formatMontant(facture.total_ttc, devise)} strong />
             </Box>
           </Paper>
         </Grid>
 
         <Grid item xs={12} md={4}>
-          <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3 }}>
+          <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3, mb: 2.5 }}>
             <Typography variant="h6" sx={{ mb: 2 }}>
               Suivi du paiement
             </Typography>
@@ -216,8 +251,39 @@ export default function FactureDetail() {
             <Divider sx={{ my: 2 }} />
             <Typography variant="caption" color="text.secondary">
               Créée le {formatDate(facture.date_creation)}
-              {facture.validated_by_admin ? ' · Validée par l\'administrateur' : ' · En attente de validation'}
+              {facture.validated_by_admin ? " · Validée par l'administrateur" : ' · En attente de validation'}
             </Typography>
+          </Paper>
+
+          {/* Signature */}
+          <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 3 }}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
+              <Typography variant="h6">Signature</Typography>
+              {facture.signature && (
+                <Chip icon={<CheckCircleOutlineIcon />} label="Signée" color="success" size="small" />
+              )}
+            </Stack>
+            {facture.signature ? (
+              <Box
+                component="img"
+                src={facture.signature}
+                alt="Signature"
+                sx={{
+                  width: '100%',
+                  maxHeight: 100,
+                  objectFit: 'contain',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  bgcolor: '#fafafa',
+                  p: 0.5,
+                }}
+              />
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                Aucune signature apposée. Cliquez sur "Signer" pour en ajouter une.
+              </Typography>
+            )}
           </Paper>
         </Grid>
       </Grid>
@@ -227,6 +293,12 @@ export default function FactureDetail() {
           Suivi enregistré.
         </Alert>
       </Snackbar>
+
+      <SignatureDialog
+        open={sigOpen}
+        onClose={() => setSigOpen(false)}
+        onConfirm={handleSaveSignature}
+      />
     </Box>
   )
 }
