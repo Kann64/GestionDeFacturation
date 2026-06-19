@@ -1,0 +1,23 @@
+{
+  "articles": [
+    { "id": 1, "designation": "Développement application web", "prix_unitaire": 4500, "categorie_id": 1 },
+    { "id": 2, "designation": "Licence logicielle (annuelle)", "prix_unitaire": 1200, "categorie_id": 1 },
+    { "id": 3, "designation": "Maintenance informatique (mensuelle)", "prix_unitaire": 800, "categorie_id": 2 },
+    { "id": 4, "designation": "Consulting / Audit", "prix_unitaire": 1500, "categorie_id": 2 },
+    { "id": 5, "designation": "Formation React (jour)", "prix_unitaire": 2000, "categorie_id": 3 },
+    { "id": 6, "designation": "Formation Salesforce (jour)", "prix_unitaire": 2500, "categorie_id": 3 },
+    { "id": 7, "designation": "Hébergement cloud (mensuel)", "prix_unitaire": 350, "categorie_id": 2 }
+  ],
+  "categories": [
+    { "id": 1, "nom": "Informatique", "tva": 20 },
+    { "id": 2, "nom": "Services", "tva": 10 },
+    { "id": 3, "nom": "Formation", "tva": 0 }
+  ],
+  "parametres": {
+    "nom": "Ma Société SARL",
+    "adresse": "123 Boulevard Mohammed V",
+    "ville": "Casablanca, Maroc",
+    "tel": "+212 5 22 00 00 00",
+    "ice": "001234567000089"
+  }
+}
